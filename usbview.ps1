@@ -1,5 +1,5 @@
 # ============================================================
-#  USB Device History Viewer
+#  USB Device History Viewer  (PowerShell 5.1 compatible)
 #  Reads past events from Windows Event Logs
 #  - USB Connections
 #  - USB Disconnections
@@ -7,7 +7,7 @@
 # ============================================================
 
 param(
-    [int]$DaysBack = 30   # How many days back to search (default: 30)
+    [int]$DaysBack = 30
 )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ function Write-Header {
 function Write-EventEntry {
     param(
         [string]$Tag,
-        [ConsoleColor]$TagColor,
+        [System.ConsoleColor]$TagColor,
         [datetime]$Time,
         [string]$DeviceName,
         [string]$InstanceId,
@@ -59,7 +59,7 @@ function Write-EventEntry {
 }
 
 function Write-SectionTitle {
-    param([string]$Title, [ConsoleColor]$Color)
+    param([string]$Title, [System.ConsoleColor]$Color)
     Write-Host "  ┌─ $Title " -ForegroundColor $Color
     Write-Host ""
 }
@@ -76,9 +76,7 @@ Write-Header
 $since = (Get-Date).AddDays(-$DaysBack)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 1 — USB Connections
-# Source : Microsoft-Windows-DriverFrameworks-UserMode/Operational
-# Event  : 2003  (device instance initialized / arrived)
+# SECTION 1 - USB Connections
 # ══════════════════════════════════════════════════════════════════════════════
 
 Write-SectionTitle "USB CONNECTIONS" Green
@@ -92,18 +90,25 @@ try {
 
     if ($connectEvents) {
         foreach ($ev in ($connectEvents | Sort-Object TimeCreated)) {
-            $xml    = [xml]$ev.ToXml()
-            $ns     = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+            $xml  = [xml]$ev.ToXml()
+            $ns   = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
             $ns.AddNamespace("e", "http://schemas.microsoft.com/win/2004/08/events/event")
-            $data   = $xml.SelectNodes("//e:Data", $ns)
+            $data = $xml.SelectNodes("//e:Data", $ns)
+
             $instanceId = ($data | Where-Object { $_.Name -eq "InstanceId" }).'#text'
             $devDesc    = ($data | Where-Object { $_.Name -eq "DeviceDescription" }).'#text'
+
+            if ($devDesc) {
+                $displayName = $devDesc
+            } else {
+                $displayName = $ev.Message.Split("`n")[0].Trim()
+            }
 
             Write-EventEntry `
                 -Tag        " CONNECTED   " `
                 -TagColor   Green `
                 -Time       $ev.TimeCreated `
-                -DeviceName ($devDesc -ne $null ? $devDesc : $ev.Message.Split("`n")[0].Trim()) `
+                -DeviceName $displayName `
                 -InstanceId $instanceId
         }
     } else {
@@ -116,9 +121,7 @@ catch {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 2 — USB Disconnections
-# Source : Microsoft-Windows-DriverFrameworks-UserMode/Operational
-# Events : 2100 (surprise removal), 2102 (device removed)
+# SECTION 2 - USB Disconnections
 # ══════════════════════════════════════════════════════════════════════════════
 
 Write-SectionTitle "USB DISCONNECTIONS" Red
@@ -139,13 +142,24 @@ try {
 
             $instanceId = ($data | Where-Object { $_.Name -eq "InstanceId" }).'#text'
             $devDesc    = ($data | Where-Object { $_.Name -eq "DeviceDescription" }).'#text'
-            $reason     = if ($ev.Id -eq 2100) { "Surprise / forced removal" } else { "Normal removal" }
+
+            if ($ev.Id -eq 2100) {
+                $reason = "Surprise / forced removal"
+            } else {
+                $reason = "Normal removal"
+            }
+
+            if ($devDesc) {
+                $displayName = $devDesc
+            } else {
+                $displayName = ""
+            }
 
             Write-EventEntry `
                 -Tag        " DISCONNECTED" `
                 -TagColor   Red `
                 -Time       $ev.TimeCreated `
-                -DeviceName ($devDesc -ne $null ? $devDesc : "") `
+                -DeviceName $displayName `
                 -InstanceId $instanceId `
                 -Extra      $reason
         }
@@ -159,116 +173,122 @@ catch {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SECTION 3 — pnputil /remove-device
-# Source : Security log — Process Creation (Event 4688)
-#          Fallback: System log keyword search
+# SECTION 3 - pnputil /remove-device
 # ══════════════════════════════════════════════════════════════════════════════
 
 Write-SectionTitle "pnputil /remove-device REMOVALS" Magenta
 
 $pnpFound = $false
 
-# --- Method A: Security log (requires Process Creation Auditing to be on) ----
+# --- Method A: Security log (Event 4688 - Process Creation) ------------------
 try {
     $secEvents = Get-WinEvent -FilterHashtable @{
         LogName   = 'Security'
         Id        = 4688
         StartTime = $since
-    } -ErrorAction SilentlyContinue |
-        Where-Object { $_.Message -match 'pnputil' }
+    } -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'pnputil' }
 
-    foreach ($ev in ($secEvents | Sort-Object TimeCreated)) {
-        $pnpFound = $true
+    if ($secEvents) {
+        foreach ($ev in ($secEvents | Sort-Object TimeCreated)) {
+            $cmdLine = ""
+            if ($ev.Message -match 'Process Command Line:\s+(.+)') {
+                $cmdLine = $Matches[1].Trim()
+            }
 
-        # Pull the command line from the message
-        $cmdLine = ""
-        if ($ev.Message -match 'Process Command Line:\s+(.+)') {
-            $cmdLine = $Matches[1].Trim()
+            if ($cmdLine -notmatch '/remove-device|/remove') { continue }
+
+            $instanceId = ""
+            if ($cmdLine -match '"([^"]+)"') {
+                $instanceId = $Matches[1]
+            } elseif ($cmdLine -match '/remove-device\s+(\S+)') {
+                $instanceId = $Matches[1]
+            }
+
+            $pnpFound = $true
+
+            Write-EventEntry `
+                -Tag        " FORCE REMOVE" `
+                -TagColor   Magenta `
+                -Time       $ev.TimeCreated `
+                -DeviceName "pnputil.exe" `
+                -InstanceId $instanceId `
+                -Extra      $cmdLine
         }
-
-        # Only show /remove-device calls
-        if ($cmdLine -notmatch '/remove-device|/remove') { continue }
-
-        $instanceId = ""
-        if ($cmdLine -match '"([^"]+)"')            { $instanceId = $Matches[1] }
-        elseif ($cmdLine -match '/remove-device\s+(\S+)') { $instanceId = $Matches[1] }
-
-        Write-EventEntry `
-            -Tag        " FORCE REMOVE" `
-            -TagColor   Magenta `
-            -Time       $ev.TimeCreated `
-            -DeviceName "pnputil.exe" `
-            -InstanceId $instanceId `
-            -Extra      $cmdLine
     }
 }
-catch { <# Security log unavailable or no audit policy — fall through #> }
+catch { }
 
-# --- Method B: System log — PnP device removal entries --------------------
+# --- Method B: System log - Kernel-PnP device removal -----------------------
 try {
     $sysEvents = Get-WinEvent -FilterHashtable @{
         LogName      = 'System'
         ProviderName = 'Microsoft-Windows-Kernel-PnP'
-        Id           = 430, 431   # Device removed / device problem
+        Id           = 430, 431
         StartTime    = $since
     } -ErrorAction SilentlyContinue
 
-    foreach ($ev in ($sysEvents | Sort-Object TimeCreated)) {
-        $xml  = [xml]$ev.ToXml()
-        $ns   = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
-        $ns.AddNamespace("e", "http://schemas.microsoft.com/win/2004/08/events/event")
-        $data = $xml.SelectNodes("//e:Data", $ns)
+    if ($sysEvents) {
+        foreach ($ev in ($sysEvents | Sort-Object TimeCreated)) {
+            $xml  = [xml]$ev.ToXml()
+            $ns   = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+            $ns.AddNamespace("e", "http://schemas.microsoft.com/win/2004/08/events/event")
+            $data = $xml.SelectNodes("//e:Data", $ns)
 
-        $instanceId = ($data | Where-Object { $_.Name -eq "DeviceInstanceId" }).'#text'
+            $instanceId = ($data | Where-Object { $_.Name -eq "DeviceInstanceId" }).'#text'
 
-        # Only flag USB devices
-        if ($instanceId -notmatch 'USB') { continue }
+            if ($instanceId -notmatch 'USB') { continue }
 
-        $pnpFound = $true
+            $pnpFound = $true
 
-        Write-EventEntry `
-            -Tag        " FORCE REMOVE" `
-            -TagColor   Magenta `
-            -Time       $ev.TimeCreated `
-            -DeviceName "Device removed (Kernel-PnP)" `
-            -InstanceId $instanceId `
-            -Extra      "Event ID $($ev.Id)"
+            Write-EventEntry `
+                -Tag        " FORCE REMOVE" `
+                -TagColor   Magenta `
+                -Time       $ev.TimeCreated `
+                -DeviceName "Device removed (Kernel-PnP)" `
+                -InstanceId $instanceId `
+                -Extra      "Event ID $($ev.Id)"
+        }
     }
 }
-catch { <# ignore #> }
+catch { }
 
-# --- Method C: Microsoft-Windows-PnPUserMode/Operational ------------------
+# --- Method C: PnPUserMode/Operational log -----------------------------------
 try {
     $pnpModeEvents = Get-WinEvent -FilterHashtable @{
         LogName   = 'Microsoft-Windows-PnPUserMode/Operational'
         StartTime = $since
-    } -ErrorAction SilentlyContinue |
-        Where-Object { $_.Message -match 'remove|delete|uninstall' -and $_.Message -match 'USB' }
+    } -ErrorAction SilentlyContinue | Where-Object {
+        $_.Message -match 'remove|delete|uninstall' -and $_.Message -match 'USB'
+    }
 
-    foreach ($ev in ($pnpModeEvents | Sort-Object TimeCreated)) {
-        $pnpFound = $true
-        Write-EventEntry `
-            -Tag        " FORCE REMOVE" `
-            -TagColor   Magenta `
-            -Time       $ev.TimeCreated `
-            -DeviceName "PnPUserMode event" `
-            -Extra      ($ev.Message.Split("`n")[0].Trim())
+    if ($pnpModeEvents) {
+        foreach ($ev in ($pnpModeEvents | Sort-Object TimeCreated)) {
+            $pnpFound = $true
+            Write-EventEntry `
+                -Tag        " FORCE REMOVE" `
+                -TagColor   Magenta `
+                -Time       $ev.TimeCreated `
+                -DeviceName "PnPUserMode event" `
+                -Extra      ($ev.Message.Split("`n")[0].Trim())
+        }
     }
 }
-catch { <# log may not exist #> }
+catch { }
 
 if (-not $pnpFound) {
     Write-NoResults
     Write-Host "  [TIP] To capture pnputil removals in the future, enable Process" -ForegroundColor DarkGray
     Write-Host "        Creation Auditing in Local Security Policy:" -ForegroundColor DarkGray
-    Write-Host "        secpol.msc → Advanced Audit Policy → Detailed Tracking" -ForegroundColor DarkGray
-    Write-Host "        → Audit Process Creation → enable Success" -ForegroundColor DarkGray
+    Write-Host "        secpol.msc -> Advanced Audit Policy -> Detailed Tracking" -ForegroundColor DarkGray
+    Write-Host "        -> Audit Process Creation -> enable Success" -ForegroundColor DarkGray
     Write-Host ""
 }
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
 Write-Host "  ─────────────────────────────────────────────" -ForegroundColor DarkGray
-Write-Host "  Search range : $(($since).ToString('yyyy-MM-dd HH:mm')) → $(Get-Date -Format 'yyyy-MM-dd HH:mm')" -ForegroundColor DarkGray
-Write-Host "  Run as Admin : $( ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) )" -ForegroundColor DarkGray
+Write-Host "  Search range : $($since.ToString('yyyy-MM-dd HH:mm')) -> $(Get-Date -Format 'yyyy-MM-dd HH:mm')" -ForegroundColor DarkGray
+Write-Host "  Run as Admin : $isAdmin" -ForegroundColor DarkGray
 Write-Host ""
