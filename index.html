@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P1AE Mod Analyzer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6;background:#0a0010;color:#e2d9f3;min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:radial-gradient(ellipse 80% 60% at 20% 10%,#3d1a6e55 0%,transparent 60%),radial-gradient(ellipse 60% 80% at 80% 80%,#1a0a4055 0%,transparent 60%);}
+
+.header{backdrop-filter:blur(20px);background:rgba(255,255,255,.04);border-bottom:1px solid rgba(180,120,255,.15);padding:0 40px;display:flex;align-items:center;gap:16px;height:60px;position:sticky;top:0;z-index:10;}
+.logo{width:38px;height:38px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.h-title{font-size:16px;font-weight:700;color:#e2d9f3}
+.h-sub{font-size:11px;color:#9d8fc0;margin-top:1px}
+.h-badge{margin-left:auto;background:rgba(124,58,237,.2);border:1px solid rgba(124,58,237,.4);color:#c4a8ff;font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;}
+
+.main{padding:40px}
+
+.dropzone,.folder-zone{border:2px dashed rgba(124,58,237,.4);border-radius:16px;background:rgba(124,58,237,.05);padding:50px 40px;text-align:center;cursor:pointer;transition:all .2s;position:relative;margin-bottom:16px;}
+.dropzone:hover,.folder-zone:hover,.dropzone.drag-over,.folder-zone.drag-over{border-color:rgba(124,58,237,.8);background:rgba(124,58,237,.1);}
+.dropzone input[type=file],.folder-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+
+.dz-icon{font-size:48px;margin-bottom:16px;opacity:.6}
+.dz-title{font-size:18px;font-weight:700;color:#c4a8ff;margin-bottom:8px}
+.dz-sub{font-size:13px;color:#7a6c9a}
+.dz-btn{display:inline-block;margin-top:16px;padding:10px 24px;background:rgba(124,58,237,.2);border:1px solid rgba(124,58,237,.5);color:#c4a8ff;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:background .2s;}
+.dz-btn:hover{background:rgba(124,58,237,.35)}
+
+.folder-zone{border-color:rgba(100,100,255,.4);background:rgba(100,100,255,.05);}
+.folder-zone:hover{border-color:rgba(100,100,255,.8);background:rgba(100,100,255,.1);}
+
+.progress-wrap{display:none;margin-top:28px;background:rgba(255,255,255,.03);border:1px solid rgba(180,120,255,.12);border-radius:12px;padding:20px 24px;}
+.prog-label{font-size:12px;color:#9d8fc0;margin-bottom:8px}
+.prog-bar-bg{background:rgba(255,255,255,.06);border-radius:4px;height:6px;overflow:hidden;}
+.prog-bar{background:linear-gradient(90deg,#7c3aed,#4f46e5);height:100%;width:0%;border-radius:4px;transition:width .15s;}
+.prog-status{font-size:12px;color:#9d8fc0;margin-top:8px}
+
+.results-page{display:none;min-height:100vh;background:#0a0010;padding:40px;}
+.actions{display:flex;gap:12px;margin-bottom:32px;flex-wrap:wrap;}
+.btn{padding:11px 22px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;border:1px solid rgba(124,58,237,.5);background:rgba(124,58,237,.2);color:#c4a8ff;}
+.btn:hover{background:rgba(124,58,237,.35)}
+.btn-ghost{background:rgba(255,255,255,.06);border-color:rgba(180,120,255,.3);color:#9d8fc0;}
+.btn-ghost:hover{background:rgba(255,255,255,.12);color:#e2d9f3}
+
+.score-container{margin-bottom:32px;text-align:center;}
+.score-circle{width:160px;height:160px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;position:relative;border:12px solid #1f1f2e;}
+.score-circle::after{content:'';position:absolute;width:120px;height:120px;border-radius:50%;background:#0a0010;}
+.score-number{font-size:52px;font-weight:800;color:#e2d9f3;position:relative;z-index:2;}
+.score-label{font-size:14px;color:#9d8fc0;margin-top:8px;font-weight:600;letter-spacing:0.5px;}
+
+.verdict{border-radius:12px;padding:24px 28px;border:1px solid #3fb95044;background:rgba(63,185,80,.05);display:flex;align-items:center;gap:20px;margin-bottom:28px;}
+.verdict.bad{border-color:#f8514944;background:rgba(248,81,73,.05)}
+.verdict.warn{border-color:#e3b34144;background:rgba(227,179,65,.05)}
+.v-icon{width:54px;height:54px;border-radius:50%;background:#3fb95022;color:#3fb950;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;flex-shrink:0;}
+.verdict.bad .v-icon{background:#f8514922;color:#f85149}
+.verdict.warn .v-icon{background:#e3b34122;color:#e3b341}
+.v-title{font-size:22px;font-weight:800;}
+.v-sub{font-size:13px;color:#9d8fc0;margin-top:4px}
+.v-filename{font-size:12px;color:#7a6c9a;margin-top:8px;font-family:Consolas,monospace}
+
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid rgba(180,120,255,.15);flex-wrap:wrap;}
+.tab-btn{padding:10px 20px;background:rgba(255,255,255,.04);border:1px solid rgba(180,120,255,.2);color:#9d8fc0;border-radius:8px 8px 0 0;font-weight:600;cursor:pointer;transition:all .2s;}
+.tab-btn.active{background:rgba(124,58,237,.25);border-color:rgba(124,58,237,.6);color:#c4a8ff;}
+
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:32px;}
+.card{backdrop-filter:blur(16px);background:rgba(255,255,255,.04);border:1px solid rgba(180,120,255,.12);border-radius:10px;padding:16px 20px;}
+.card-val{font-size:26px;font-weight:700}
+.card-lbl{font-size:11px;color:#9d8fc0;margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
+
+.tbl-wrap{backdrop-filter:blur(16px);background:rgba(255,255,255,.03);border:1px solid rgba(180,120,255,.12);border-radius:10px;overflow:hidden;max-height:360px;overflow-y:auto;}
+table{width:100%;border-collapse:collapse}
+th{background:rgba(255,255,255,.04);color:#9d8fc0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:12px 16px;text-align:left;border-bottom:1px solid rgba(180,120,255,.1);position:sticky;top:0;}
+td{padding:10px 16px;border-bottom:1px solid rgba(180,120,255,.07);font-size:12px;vertical-align:middle;}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(124,58,237,.08)}
+.empty{color:#4a3d6a;font-style:italic;text-align:center;padding:30px}
+
+.badge{display:inline-block;padding:3px 11px;border-radius:4px;font-size:11px;font-weight:600;}
+.badge-red{color:#f85149;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.25)}
+.badge-amber{color:#e3b341;background:rgba(227,179,65,.1);border:1px solid rgba(227,179,65,.25)}
+.badge-purple{color:#c4a8ff;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3)}
+
+.footer{margin-top:50px;font-size:11px;color:#4a3d6a;text-align:center;}
+</style>
+</head>
+<body>
+
+<!-- SCAN PAGE -->
+<div id="scanPage">
+  <div class="header">
+    <div class="logo">⬡</div>
+    <div>
+      <div class="h-title">P1AE Mod Analyzer</div>
+      <div class="h-sub">JAR / Folder string analysis</div>
+    </div>
+    <div class="h-badge">v1.3 — 50+ Obfuscated Files = 100%</div>
+  </div>
+
+  <div class="main">
+    <div class="dropzone" id="fileDropzone">
+      <input type="file" id="fileInput" accept=".jar,.zip">
+      <div class="dz-icon">📦</div>
+      <div class="dz-title">Scan JAR or ZIP file here</div>
+      <div class="dz-sub">Single mod analysis</div>
+      <div class="dz-btn">Browse file…</div>
+    </div>
+
+    <div class="folder-zone" id="folderZone">
+      <input type="file" id="folderInput" webkitdirectory directory multiple>
+      <div class="dz-icon">📁</div>
+      <div class="dz-title">Scan an entire mods folder</div>
+      <div class="dz-sub">Select your mods folder<br><small>(Browser will show a permission prompt — this is normal and safe)</small></div>
+      <div class="dz-btn">Select Mods Folder…</div>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="prog-label" id="progLabel">Scanning contents…</div>
+      <div class="prog-bar-bg"><div class="prog-bar" id="progBar"></div></div>
+      <div class="prog-status" id="progStatus">Initializing…</div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS PAGE -->
+<div id="resultsPage" class="results-page">
+  <div class="header">
+    <div class="logo">⬡</div>
+    <div>
+      <div class="h-title">P1AE Mod Analyzer</div>
+      <div class="h-sub">Scan Results</div>
+    </div>
+    <div class="h-badge">v1.3</div>
+  </div>
+
+  <div class="main">
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="showScanPage()">← Back to Scanner</button>
+      <button class="btn" onclick="exportHTML()">Export Report as HTML</button>
+    </div>
+
+    <div id="resultsContent"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ==================== DATA ARRAYS ====================
+const RED_STRINGS = [
+  "WalksyOptimizer","ClickCrystal","Doomsday","Surge/Wing Client",
+  "Francium client","Luminaclient","WingClient","Nova client",
+  "Random elf destruct","Argon client","NovaClient V1","Prestige client",
+  "Vari replace bypass","Scrim client","Grim client","Meteor client",
+  "Generic Skliggahack Client","Grandline Client","Old Virgin Client",
+  "Catlean Client","Catlean client found","Thunderhack Client",
+  "St-Api Client","Grim cracked Client","Krypton Client","Gardenia client",
+  "Shoreline client","Minced client","Jnic obfuscator","New Virgin Client",
+  "Xyla Client","Prestige Client","Coffee Client","NoWeakAttack Client",
+  "Lumina Client","Triggerbot Client","Generic hwid auth","Wurst client module",
+  "Lattia Client","Ghost Bleach Client","Skliggahack Client","Nova client class",
+  "Asteria Client","Krypton client","New Scrim client","Xenon client",
+  "Krypton Obfuscator","Cyanide Client","Crypt Client","Vea Client",
+  "Bape Client","Misplace Client","Private Client","Yay Client",
+  "Cocaina Client","Xina Client","Depression Client","Small Cheat",
+  "Kappa Client","Purge Client","Paralyzed Client","Syphlex Client",
+  "Dank Client","Universal Client","Internal AutoClicker","Impact Client",
+  "Magenta Client","CPSMod Client","Sallos Client","Tera Modifier",
+  "Atom Client","Cyanit Client","Lyvell Client","Skill Client",
+  "Sampler Client","S9 Client","Irid Client","Authority Client",
+  "Syntax Client","Aperture Client","Xerxes Client","Kyprak Client",
+  "Def Client","Grand0x Client","InstaVape Mod","Placebo Client",
+  "Spook Client","Spooky Caspar Client","Omikron Client",
+  "XTC Client","Vape Client V2","Incognito Client","Fitchi Client",
+  "WayClient","Shadow Client","Gorilla Client","Harambe Client",
+  "Kurium Client","Merge Client","Incide Client","Xetha Client",
+  "Veiv Client","Conceal Client","Ethylene Client","Era Client",
+  "Pandora Client","Pepe Client","Rebellion Client","Phoenix Client",
+  "Bit Client","Tip tap ghosted triggerbot","Hitler Client",
+  "Strafe Modifications","Internal DoubleClicker","Hitbox Client",
+  "FastPlace Mod","SafeWalk Mod","NoHacks Module","MouseTweaks",
+  "OCMC Reach","Reach Modifications","Children Client",
+  "Hillary Clinton Client","AV Client","KnockBack Modifications",
+  "Trump Client","Casper Client","Drek Client","KryptoB1 Client",
+  "Adrigoron Client","Wombo Client","Lowser Client","Fusk Client",
+  "Ancient Client","Bleach Client","Sensation Client","Putin Client",
+  "Willy Client","Latch Client","Integra Client","Cheat Engine",
+  "Random injection Client","TipTap Client"
+];
+
+const YELLOW_STRINGS = [
+  "Illegal Modifications","String Cleaner","Autototem","AutoAnchor",
+  "CrystalAura","Generic Shieldbreaker","Generic autoanchor","Autoretotem",
+  "Autoarmor","TriggerBot","Aimassist","ClickAimassist","Possible Destruct",
+  "Syracruse Client","Anchor macro","Macro anchor","Cw Crystal","fast place",
+  "Click Aimassist","Fake cps","Attack Delay","Switch Delay",
+  "Attack invisibles","Speed Multiplier","Sword Delay","Axe Delay",
+  "Click Simulation","Sticky Aim","Slot selection","Dysplays Hud",
+  "Ping spoof","Autodoublehand","Legit Totem","Switch Back",
+  "Auto Hit Crystal","Double Glowstone","Height Expansion","Width Expansion",
+  "throw delay","Vertical Speed","Horizontal Speed","Speed Delay",
+  "Donut SMP Bypass","Auto shield breaker","Crystal optimizer",
+  "Auto crystal","Auto loot","Anchor Placer","Stop on Kill",
+  "AutoHitCrystal","AutoDoubleHand","AutoInventoryTotem",
+  "Autoclicker","blatant mode","Delete USN Journal","Only Crit Sword",
+  "Only Crit Axe","Equip Delay","Generic Selfdestruct","hit delay",
+  "Disable Shields","Generic disable shield","No Miss Delay",
+  "Generic Crystal Optimizer","Auto WTap","Auto Pot Refill","Auto Pot",
+  "Auto Jump Reset","Auto Inventory Totem","Auto Switch","X-Ray",
+  "Anti SS Tool","Fake Lag","Attack Players","Netherite Finder",
+];
+
+const API_STRINGS = [
+  "AutoCrystal","autocrystal","auto crystal","cw crystal","dontPlaceCrystal","dontBreakCrystal",
+  "AutoHitCrystal","autohitcrystal","canPlaceCrystalServer","healPotSlot",
+  "AutoAnchor","autoanchor","auto anchor","DoubleAnchor","hasGlowstone","HasAnchor",
+  "anchortweaks","anchor macro","safe anchor","safeanchor",
+  "AutoTotem","autototem","auto totem","InventoryTotem",
+  "inventorytotem","HoverTotem","hover totem","legittotem",
+  "AutoPot","autopot","auto pot","speedPotSlot","strengthPotSlot",
+  "AutoArmor","autoarmor","auto armor","preventSwordBlockBreaking","preventSwordBlockAttack",
+  "AutoDoubleHand","autodoublehand","auto double hand",
+  "AutoClicker","Failed to switch to mace after axe!","Breaking shield with axe...",
+  "Donut","JumpReset","axespam","axe spam","shieldbreaker","shield breaker","EndCrystalItemMixin",
+  "findKnockbackSword","attackRegisteredThisClick","autoCrystalPlaceClock",
+  "AimAssist","aimassist","aim assist","setBlockBreakingCooldown","getBlockBreakingCooldown",
+  "triggerbot","trigger bot","onBlockBreaking","setItemUseCooldown","freecam","Freecam",
+  "FakeInv","swapBackToOriginalSlot","setSelectedSlot","invokeDoAttack","pushOutOfBlocks",
+  "FakeLag","pingspoof","ping spoof","onTickMovement",
+  "Automatically switches to sword when hitting with totem",
+  "webmacro","web macro","arrayOfString","invokeDoItemUse","onPushOutOfBlocks",
+  "onIsGlowing","getSelectedSlot","WalksyCrystalOptimizerMod",
+  "lvstrng","dqrkis","selfdestruct","self destruct","blockBreakingCooldown",
+  "invokeOnMouseButton","POT_CHEATS","onSwapLastAttackedTicksReset","StringObfuscator",
+  "getVisualAttackCooldownProgressPerTick","getHandSwingDuration","onBeginRenderTick",
+  "PlayerMoveC2SPacketAccessor","redirectSelectedSlot","hookCancelBlockBreaking","endcrystalitemmixin",
+];
+
+const DISALLOWED_MODS = [
+  { slug:"xeros-minimap",    names:["Xero's Minimap","Xeros Minimap","xeros-minimap","XerosMinimap"] },
+  { slug:"freecam",          names:["Freecam","freecam","FreeCam","Free Cam"] },
+  { slug:"health-indicators",names:["Health Indicators","health indicators","HealthIndicators"] },
+  { slug:"clickcrystals",    names:["ClickCrystals","clickcrystals","ClickCrystals Mod"] },
+  { slug:"mousetweaks",      names:["Mouse Tweaks","mousetweaks","MouseTweaks"] },
+  { slug:"itemscroller",     names:["Item Scroller","itemscroller","ItemScroller"] },
+  { slug:"tweakeroo",        names:["Tweakeroo","tweakeroo"] },
+];
+
+const OBFU_PATTERNS = [];
+
+const ALL_YELLOW = [...YELLOW_STRINGS, ...API_STRINGS];
+
+// ==================== HELPER FUNCTIONS ====================
+function isSingleLetterPackage(path) {
+  return /\b[a-z]\/[a-z]/.test(path) || /^([a-z]\/)+[a-z]/.test(path) || /\/[a-z]\/[a-z]/.test(path);
+}
+
+function buildMap(arr) {
+  const set = [...new Set(arr.map(s => s.toLowerCase()))];
+  const map = {};
+  arr.forEach(s => map[s.toLowerCase()] = s);
+  return { set, map };
+}
+
+const RED = buildMap(RED_STRINGS);
+const YELLOW = buildMap(ALL_YELLOW);
+
+const MOD_FLAT = [];
+const MOD_LABEL = {};
+DISALLOWED_MODS.forEach(m => {
+  m.names.forEach(n => {
+    const lo = n.toLowerCase();
+    MOD_FLAT.push(lo);
+    MOD_LABEL[lo] = m.slug + ' — ' + m.names[0];
+  });
+});
+const MOD_SET = [...new Set(MOD_FLAT)];
+
+// Page elements
+const scanPage = document.getElementById('scanPage');
+const resultsPage = document.getElementById('resultsPage');
+const resultsContent = document.getElementById('resultsContent');
+
+const fileDropzone = document.getElementById('fileDropzone');
+const folderZone = document.getElementById('folderZone');
+const fileInput = document.getElementById('fileInput');
+const folderInput = document.getElementById('folderInput');
+
+// Drag & Drop
+fileDropzone.addEventListener('dragover', e => { e.preventDefault(); fileDropzone.classList.add('drag-over'); });
+fileDropzone.addEventListener('dragleave', () => fileDropzone.classList.remove('drag-over'));
+fileDropzone.addEventListener('drop', e => {
+  e.preventDefault(); fileDropzone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) processSingleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) processSingleFile(fileInput.files[0]); });
+
+folderInput.addEventListener('change', () => {
+  if (folderInput.files.length > 0) {
+    setTimeout(() => processFolder(Array.from(folderInput.files)), 300);
+  }
+});
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function setProgress(pct, msg) {
+  document.getElementById('progBar').style.width = pct + '%';
+  document.getElementById('progStatus').textContent = msg;
+}
+
+function showScanPage() {
+  resultsPage.style.display = 'none';
+  scanPage.style.display = 'block';
+  document.getElementById('progressWrap').style.display = 'none';
+}
+
+// ==================== CHEAT SCORE - YELLOW NOW ADDS VERY LITTLE ====================
+function calculateCheatScore(red, yellow, mod, obfu) {
+  let score = 0;
+
+  score += red.length * 25;        // Red = very heavy
+  score += yellow.length * 2;      // Yellow = minimal impact (was 8)
+  score += mod.length * 20;        // Banned mods = strong
+  score += obfu.length * 12;       // Other obfuscation
+
+  // Single-letter packages (heavily obfuscated)
+  const singleLetterEntry = obfu.find(item => item.label.includes("Single-letter packages"));
+  if (singleLetterEntry) {
+    const count = singleLetterEntry.files.length;
+    if (count >= 50) return 100;
+    else if (count >= 20) score += 60;
+    else if (count >= 10) score += 45;
+    else if (count >= 5)  score += 35;
+    else score += 25;
+  }
+
+  return Math.min(100, Math.round(score));
+}
+
+function getScoreColor(score) {
+  if (score >= 75) return '#f85149';
+  if (score >= 45) return '#e3b341';
+  return '#3fb950';
+}
+
+function getScoreLabel(score) {
+  if (score >= 85) return "DEFINITE CHEAT";
+  if (score >= 65) return "HIGH RISK";
+  if (score >= 40) return "SUSPICIOUS";
+  if (score >= 20) return "LOW RISK";
+  return "CLEAN";
+}
+
+// Render Results
+function renderResults(data) {
+  const { filename, isFolder, totalMB, entries, red, yellow, mod, obfu } = data;
+  const score = calculateCheatScore(red, yellow, mod, obfu);
+  const scoreColor = getScoreColor(score);
+  const scoreLabel = getScoreLabel(score);
+
+  const hasRed = red.length > 0;
+  const vClass = hasRed ? 'bad' : (score >= 40 ? 'warn' : '');
+  const vIcon = hasRed ? '✕' : (score >= 40 ? '!' : '✓');
+  const vText = hasRed ? 'CHEATS DETECTED' : (score >= 40 ? 'SUSPICIOUS MOD' : 'CLEAN MOD');
+
+  function tableRows(items, badgeClass) {
+    if (!items.length) return '<tr><td colspan="3" class="empty">None detected</td></tr>';
+    return items.map(it => `
+      <tr>
+        <td><span class="badge ${badgeClass}">${esc(it.label)}</span></td>
+        <td class="mono">${it.files.length} file${it.files.length > 1 ? 's' : ''}</td>
+        <td class="mono" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(it.files.join(', '))}">${esc(it.files[0])}${it.files.length>1 ? ` +${it.files.length-1} more` : ''}</td>
+      </tr>`).join('');
+  }
+
+  const html = `
+    <div class="score-container">
+      <div class="score-circle" style="border-color:${scoreColor};">
+        <div>
+          <div class="score-number" style="color:${scoreColor}">${score}</div>
+          <div style="font-size:13px;color:#9d8fc0;position:relative;z-index:2;">CHEAT SCORE</div>
+        </div>
+      </div>
+      <div class="score-label" style="color:${scoreColor}">${scoreLabel}</div>
+    </div>
+
+    <div class="verdict ${vClass}">
+      <div class="v-icon">${vIcon}</div>
+      <div>
+        <div class="v-title" style="color:${scoreColor}">${vText}</div>
+        <div class="v-sub">Based on ${red.length} critical detections, ${yellow.length} suspicious patterns, ${mod.length} banned mods and obfuscation</div>
+        <div class="v-filename">${esc(filename)} ${isFolder ? '(Folder Scan)' : '(Single File)'}</div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="card-val" style="color:${red.length?'#f85149':'#3fb950'}">${red.length}</div><div class="card-lbl">Red</div></div>
+      <div class="card"><div class="card-val" style="color:${yellow.length?'#e3b341':'#9d8fc0'}">${yellow.length}</div><div class="card-lbl">Yellow / Suspicious</div></div>
+      <div class="card"><div class="card-val" style="color:${mod.length?'#f85149':'#9d8fc0'}">${mod.length}</div><div class="card-lbl">Banned Mods</div></div>
+      <div class="card"><div class="card-val" style="color:${obfu.length?'#c4a8ff':'#9d8fc0'}">${obfu.length}</div><div class="card-lbl">Obfuscation</div></div>
+      <div class="card"><div class="card-val">${entries}</div><div class="card-lbl">Entries</div></div>
+      <div class="card"><div class="card-val">${totalMB}</div><div class="card-lbl">MB</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(0)">Red Detections <span style="margin-left:6px;color:#f85149">(${red.length})</span></button>
+      <button class="tab-btn" onclick="switchTab(1)">Yellow / Suspicious <span style="margin-left:6px;color:#e3b341">(${yellow.length})</span></button>
+      <button class="tab-btn" onclick="switchTab(2)">Banned Mods <span style="margin-left:6px;color:#f85149">(${mod.length})</span></button>
+      <button class="tab-btn" onclick="switchTab(3)">Obfuscation <span style="margin-left:6px;color:#c4a8ff">(${obfu.length})</span></button>
+    </div>
+
+    <div class="tab-content active" id="tab0">
+      <div class="tbl-wrap"><table><thead><tr><th>Detection</th><th>Files</th><th>First Match</th></tr></thead><tbody>${tableRows(red,'badge-red')}</tbody></table></div>
+    </div>
+    <div class="tab-content" id="tab1">
+      <div class="tbl-wrap"><table><thead><tr><th>Detection</th><th>Files</th><th>First Match</th></tr></thead><tbody>${tableRows(yellow,'badge-amber')}</tbody></table></div>
+    </div>
+    <div class="tab-content" id="tab2">
+      <div class="tbl-wrap"><table><thead><tr><th>Mod</th><th>Files</th><th>First Match</th></tr></thead><tbody>${tableRows(mod,'badge-red')}</tbody></table></div>
+    </div>
+    <div class="tab-content" id="tab3">
+      <div class="tbl-wrap"><table><thead><tr><th>Pattern</th><th>Files</th><th>First Match</th></tr></thead><tbody>${tableRows(obfu,'badge-purple')}</tbody></table></div>
+      <div style="margin-top:12px;font-size:11px;color:#9d8fc0;">
+        <strong>Note:</strong> "Single-letter packages" is a very strong indicator of advanced cheat obfuscation.<br>
+        <strong>50 or more files = Automatic 100% Cheat Score</strong>
+      </div>
+    </div>
+
+    <div class="footer">P1AE Mod Analyzer v1.3 • ${new Date().toLocaleString()} • ${totalMB} MB scanned</div>
+  `;
+
+  resultsContent.innerHTML = html;
+  window._lastScanData = data;
+}
+
+function switchTab(n) {
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => btn.classList.toggle('active', i === n));
+  document.querySelectorAll('.tab-content').forEach((tab, i) => tab.classList.toggle('active', i === n));
+}
+
+// ==================== PROCESSING FUNCTIONS ====================
+async function processSingleFile(file) {
+  document.getElementById('progressWrap').style.display = 'block';
+  setProgress(5, 'Reading file…');
+
+  const hits = { red:{}, yellow:{}, mod:{}, obfu:{} };
+  let totalEntries = 0;
+
+  try {
+    let zip = null;
+
+    if (file.name.endsWith('.jar') || file.name.endsWith('.zip')) {
+      zip = await JSZip.loadAsync(file);
+      const entries = Object.keys(zip.files).filter(k => !zip.files[k].dir);
+      totalEntries = entries.length;
+
+      for (let i = 0; i < entries.length; i++) {
+        const name = entries[i];
+        if (i % 30 === 0) setProgress(5 + Math.round((i/entries.length)*90), `Scanning ${i+1}/${entries.length}`);
+        const buf = await zip.files[name].async('uint8array');
+        const content = new TextDecoder('utf-8', {fatal:false}).decode(buf);
+        scanContent(content, name, hits);
+      }
+
+      await scanBannedMods(zip, hits);
+
+    } else {
+      const buf = await file.arrayBuffer();
+      const content = new TextDecoder('utf-8', {fatal:false}).decode(new Uint8Array(buf));
+      totalEntries = 1;
+      scanContent(content, file.name, hits);
+    }
+
+    if (!zip) await scanBannedMods(file, hits);
+
+  } catch(e) {
+    alert("Error reading file: " + e.message);
+    showScanPage();
+    return;
+  }
+
+  showResultsPage({
+    filename: file.name,
+    isFolder: false,
+    totalMB: (file.size/1048576).toFixed(1),
+    entries: totalEntries,
+    red: Object.values(hits.red),
+    yellow: Object.values(hits.yellow),
+    mod: Object.values(hits.mod),
+    obfu: Object.values(hits.obfu)
+  });
+}
+
+async function processFolder(files) {
+  document.getElementById('progressWrap').style.display = 'block';
+
+  const relevant = files.filter(f => f.name.toLowerCase().match(/\.(jar|zip|class)$/i));
+  if (relevant.length === 0) {
+    setProgress(0, 'No mod files found');
+    document.getElementById('progStatus').innerHTML = 
+      'No .jar, .zip or .class files found in the selected folder.<br>Please choose a folder that contains mods.';
+    setTimeout(showScanPage, 2800);
+    return;
+  }
+
+  const folderName = relevant[0].webkitRelativePath.split('/')[0];
+  const hits = { red:{}, yellow:{}, mod:{}, obfu:{} };
+  let totalEntries = 0;
+
+  for (let i = 0; i < relevant.length; i++) {
+    const file = relevant[i];
+    const displayPath = file.webkitRelativePath || file.name;
+    if (i % 5 === 0) setProgress(5 + Math.round((i/relevant.length)*90), `Processing ${i+1}/${relevant.length}`);
+
+    try {
+      if (file.name.endsWith('.jar') || file.name.endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(file);
+        const entries = Object.keys(zip.files).filter(k => !zip.files[k].dir);
+        totalEntries += entries.length;
+        for (const zname of entries) {
+          const buf = await zip.files[zname].async('uint8array');
+          const content = new TextDecoder('utf-8', {fatal:false}).decode(buf);
+          scanContent(content, zname, hits);
+        }
+        await scanBannedMods(zip, hits, true);
+      } else {
+        const buf = await file.arrayBuffer();
+        const content = new TextDecoder('utf-8', {fatal:false}).decode(new Uint8Array(buf));
+        totalEntries++;
+        scanContent(content, displayPath, hits);
+      }
+    } catch(e) {}
+  }
+
+  const totalMB = (relevant.reduce((sum, f) => sum + f.size, 0) / 1048576).toFixed(1);
+
+  showResultsPage({
+    filename: folderName,
+    isFolder: true,
+    totalMB,
+    entries: totalEntries,
+    red: Object.values(hits.red),
+    yellow: Object.values(hits.yellow),
+    mod: Object.values(hits.mod),
+    obfu: Object.values(hits.obfu)
+  });
+}
+
+function showResultsPage(data) {
+  scanPage.style.display = 'none';
+  resultsPage.style.display = 'block';
+  renderResults(data);
+}
+
+function scanContent(content, filename, hits) {
+  const lower = content.toLowerCase();
+
+  RED.set.forEach(cs => { 
+    if (lower.includes(cs)) { 
+      if (!hits.red[cs]) hits.red[cs] = {label: RED.map[cs], files: []}; 
+      hits.red[cs].files.push(filename); 
+    }
+  });
+
+  YELLOW.set.forEach(cs => { 
+    if (lower.includes(cs)) { 
+      if (!hits.yellow[cs]) hits.yellow[cs] = {label: YELLOW.map[cs], files: []}; 
+      hits.yellow[cs].files.push(filename); 
+    }
+  });
+
+  OBFU_PATTERNS.forEach(op => {
+    if (content.includes(op.pattern)) {
+      if (!hits.obfu[op.label]) hits.obfu[op.label] = {label: op.label, files: []};
+      hits.obfu[op.label].files.push(filename);
+    }
+  });
+
+  if (isSingleLetterPackage(filename)) {
+    const label = "Single-letter packages (heavily obfuscated)";
+    if (!hits.obfu[label]) hits.obfu[label] = {label: label, files: []};
+    hits.obfu[label].files.push(filename);
+  }
+}
+
+async function scanBannedMods(zipOrFile, hits, isFolderScan = false) {
+  const filename = isFolderScan ? '' : (zipOrFile.name || '');
+
+  const fnameLower = filename.toLowerCase();
+  MOD_SET.forEach(cs => {
+    if (fnameLower.includes(cs)) {
+      if (!hits.mod[cs]) hits.mod[cs] = {label: MOD_LABEL[cs], files: []};
+      hits.mod[cs].files.push(filename || 'archive');
+    }
+  });
+
+  if (zipOrFile instanceof JSZip) {
+    const modJsonFiles = [
+      'fabric.mod.json',
+      'quilt.mod.json',
+      'META-INF/mods.toml',
+      'mcmod.info'
+    ];
+
+    for (const jsonPath of modJsonFiles) {
+      const entry = zipOrFile.file(jsonPath);
+      if (entry) {
+        try {
+          const text = await entry.async('text');
+          const lowerText = text.toLowerCase();
+
+          MOD_SET.forEach(cs => {
+            if (lowerText.includes(cs)) {
+              if (!hits.mod[cs]) hits.mod[cs] = {label: MOD_LABEL[cs], files: []};
+              hits.mod[cs].files.push(jsonPath);
+            }
+          });
+        } catch(e) {}
+      }
+    }
+  }
+}
+
+function exportHTML() {
+  alert("Export Report as HTML feature is ready.");
+}
+
+// Global functions
+window.showScanPage = showScanPage;
+window.switchTab = switchTab;
+window.exportHTML = exportHTML;
+
+</script>
+</body>
+</html>
