@@ -65,7 +65,8 @@ $urls = @(
     'https://www.nirsoft.net/utils/winprefetchview-x64.zip',
     'https://github.com/winsiderss/si-builds/releases/download/4.0.26115.206/systeminformer-build-canary-setup.exe',
     'https://github.com/p1aeQT/javaw/releases/download/main/P1AE.Javaw.exe',
-    'https://github.com/MeowTonynoh/MeowResolver/releases/download/MeowResolver/MeowResolver.exe'
+    'https://github.com/MeowTonynoh/MeowResolver/releases/download/MeowResolver/MeowResolver.exe',
+    'https://github.com/Lafferrr/SSTools/raw/refs/heads/main/SSTools/MacroScanner/MacroScanner.exe'
 )
 
 $counter = 0
